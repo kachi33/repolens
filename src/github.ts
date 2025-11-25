@@ -21,7 +21,9 @@ export interface RepoInfo {
     stargazers_count: number;
     watchers_count: number;
     language: string | null;
+
 }
+import { RepoAnalysis, RepoAnalyzer } from "./analyzer";
 
 export interface Languages {
     [language: string]: number;
@@ -60,21 +62,85 @@ export class GithubClient {
         const languages: Languages = await response.json();
         return languages;
     }
+
+    async fileExists(owner: string, repo: string, path: string): Promise<boolean> {
+        try {
+            const response = await fetch(`${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`, {
+                headers: {
+                    Authorization: `token ${this.token}`,
+                    Accept: 'application/vnd.github.v3+json',
+                },
+            });
+            return response.ok;
+        } catch {
+            return false;
+        }
+    }
+
+    async fetchFileContent(owner: string, repo: string, path: string): Promise<string | null> {
+        try {
+            const response = await fetch(
+                `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`,
+                {
+                    headers: {
+                        Authorization: `token ${this.token}`,
+                        Accept: 'application/vnd.github.v3+json',
+                    },
+                }
+            );
+
+            if (!response.ok) return null;
+
+            const data = await response.json();
+
+            // GitHub returns base64 encoded content
+            if (data.content) {
+                return Buffer.from(data.content, 'base64').toString('utf-8');
+            }
+
+            return null;
+        } catch {
+            return null;
+        }
+    }
+    async checkDirectory(owner: string, repo: string, path: string): Promise<boolean> {
+        try {
+            const response = await fetch(
+                `${this.baseUrl}/repos/${owner}/${repo}/contents/${path}`,
+                {
+                    headers: {
+                        Authorization: `token ${this.token}`,
+                        Accept: 'application/vnd.github.v3+json',
+                    },
+                }
+            );
+
+            if (!response.ok) return false;
+
+            const data = await response.json();
+            return Array.isArray(data) && data.length > 0;
+        } catch {
+            return false;
+        }
+    }
 }
 
-export function generateRepoMarkdown(repos: RepoInfo[], languagesMap: Map<string, Languages>): string {
+
+export function generateRepoMarkdown(repos: RepoInfo[], languagesMap: Map<string, Languages>, analysisMap: Map<string, RepoAnalysis>): string {
     let md = `# RepoLens Summary\n\n`;
 
     md += `Total Repositories: ${repos.length}\n\n`;
-    md += `| Repository | Stars | Language |\n`;
-    md += `|------------|-------|----------|\n`;
+    md += `| Repository | Stars | Language | Frameworks | Tools |\n`;
+    md += `|------------|-------|----------|------------|-------|\n`;
 
     for (const repo of repos) {
         const langs = languagesMap.get(repo.name);
+        const analysis = analysisMap.get(repo.name);
         const primaryLang = langs ? Object.keys(langs)[0] : repo.language || 'N/A';
-        const date = new Date(repo.created_at).toLocaleDateString();
+        const frameworks = analysis?.frameworks.join(', ') || '-';
+        const tools = analysis?.tools.join(', ') || '-';
 
-        md += `| [${repo.name}](${repo.html_url}) | ${repo.stargazers_count} | ${primaryLang} | ${date} |\n`;
+        md += `| [${repo.name}](${repo.html_url}) | ${repo.stargazers_count} | ${primaryLang} | ${frameworks} | ${tools} |\n`;
     }
     return md;
 }

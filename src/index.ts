@@ -1,8 +1,9 @@
 import { Command } from "commander";
 import dotenv from "dotenv";
 import chalk from "chalk";
-import {GithubClient, Languages, generateRepoMarkdown} from "./github";
+import { GithubClient, Languages, generateRepoMarkdown } from "./github";
 import { writeFileSync } from "fs";
+import { RepoAnalyzer, RepoAnalysis } from "./analyzer";
 
 
 
@@ -19,13 +20,13 @@ program
     .option("-o, --output <file>", 'Output file path', './repolens_report.md')
     .parse();
 
-    async function main() {
+async function main() {
     const options = program.opts();
     const token = options.token || process.env.GITHUB_TOKEN;
     if (!token) {
         console.error(chalk.red("Error: GitHub token is required. Provide it via --token option or GITHUB_TOKEN environment variable."));
         process.exit(1);
-    }   
+    }
 
     const client = new GithubClient(token);
 
@@ -40,8 +41,17 @@ program
         const languages = await client.fetchLanguages(repo.owner.login, repo.name);
         languagesMap.set(repo.name, languages);
     }
+        console.log(chalk.blue('\nAnalyzing repositories...'));
+        const analyzer = new RepoAnalyzer(client);
+        const analysisMap = new Map<string, RepoAnalysis>();
 
-    const report = generateRepoMarkdown(repos, languagesMap);
+        for (const repo of repos) {
+            console.log(chalk.gray(`  Analyzing ${repo.name}...`));
+            const analysis = await analyzer.analyzeRepo(repo.owner.login, repo.name);
+            analysisMap.set(repo.name, analysis);
+        }
+
+    const report = generateRepoMarkdown(repos, languagesMap, analysisMap);
 
     writeFileSync(options.output, report);
     console.log(chalk.green(`Report written to ${options.output}`));
