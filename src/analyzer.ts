@@ -27,18 +27,29 @@ async analyzeRepo(owner: string, repo: string): Promise<RepoAnalysis> {
         tools: [],
     };
 
-    analysis.hasPackageJson = await this.client.fileExists(owner, repo, 'package.json');
-    analysis.hasDockerfile = await this.client.fileExists(owner, repo, 'Dockerfile');
-    analysis.hasPythonRequirements = await this.client.fileExists(owner, repo, 'requirements.txt');
-    analysis.hasCI = await this.client.checkDirectory(owner, repo, '.github/workflows');
+    const [hasPackageJson, hasDockerfile, hasPythonRequirements, hasCI] = await Promise.all([
+        this.client.fileExists(owner, repo, 'package.json'),
+        this.client.fileExists(owner, repo, 'Dockerfile'),
+        this.client.fileExists(owner, repo, 'requirements.txt'),
+        this.client.checkDirectory(owner, repo, '.github/workflows'),
+    ]);
+
+    analysis.hasPackageJson = hasPackageJson;
+    analysis.hasDockerfile = hasDockerfile;
+    analysis.hasPythonRequirements = hasPythonRequirements;
+    analysis.hasCI = hasCI;
+
+    const contentPromises: Promise<void>[] = [];
 
     if (analysis.hasPackageJson) {
-        await this.analyzePackageJson(owner, repo, analysis);
+        contentPromises.push(this.analyzePackageJson(owner, repo, analysis));
     }
 
     if (analysis.hasPythonRequirements) {
-        await this.analyzePythonRequirements(owner, repo, analysis);
+        contentPromises.push(this.analyzePythonRequirements(owner, repo, analysis));
     }
+
+    await Promise.all(contentPromises);
 
     if (analysis.hasDockerfile) {
         analysis.tools.push('docker');
@@ -86,7 +97,6 @@ async analyzeRepo(owner: string, repo: string): Promise<RepoAnalysis> {
         const content = await this.client.fetchFileContent(owner, repo, 'requirements.txt');
         if (!content) return;
 
-        // Detect Python frameworks
         if (content.includes('django')) analysis.frameworks.push('django');
         if (content.includes('flask')) analysis.frameworks.push('flask');
         if (content.includes('fastapi')) analysis.frameworks.push('fastapi');

@@ -36,20 +36,31 @@ async function main() {
 
     const languagesMap = new Map<string, Languages>();
 
-    for (const repo of repos) {
-        console.log(chalk.gray(`-> ${repo.name}`));
+    console.log(chalk.blue('Fetching languages for all repos in parallel...'));
+    const languagePromises = repos.map(async (repo) => {
         const languages = await client.fetchLanguages(repo.owner.login, repo.name);
-        languagesMap.set(repo.name, languages);
-    }
-        console.log(chalk.blue('\nAnalyzing repositories...'));
-        const analyzer = new RepoAnalyzer(client);
-        const analysisMap = new Map<string, RepoAnalysis>();
+        return { name: repo.name, languages };
+    });
 
-        for (const repo of repos) {
-            console.log(chalk.gray(`  Analyzing ${repo.name}...`));
-            const analysis = await analyzer.analyzeRepo(repo.owner.login, repo.name);
-            analysisMap.set(repo.name, analysis);
-        }
+    const languageResults = await Promise.all(languagePromises);
+    languageResults.forEach(({ name, languages }) => {
+        languagesMap.set(name, languages);
+    });
+    console.log(chalk.green('✓ Languages fetched'));
+    console.log(chalk.blue('\nAnalyzing repositories in parallel...'));
+    const analyzer = new RepoAnalyzer(client);
+    const analysisMap = new Map<string, RepoAnalysis>();
+
+    const analysisPromises = repos.map(async (repo) => {
+        const analysis = await analyzer.analyzeRepo(repo.owner.login, repo.name);
+        return { name: repo.name, analysis };
+    });
+
+    const analysisResults = await Promise.all(analysisPromises);
+    analysisResults.forEach(({ name, analysis }) => {
+        analysisMap.set(name, analysis);
+    });
+    console.log(chalk.green('✓ Analysis complete'));
 
     const report = generateRepoMarkdown(repos, languagesMap, analysisMap);
 
