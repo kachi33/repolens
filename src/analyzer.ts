@@ -9,6 +9,7 @@ export interface RepoAnalysis {
 }
 
 import { GithubClient } from "./github";
+import { defaultTagger } from "./tagger";
 
 export class RepoAnalyzer {
     private client: GithubClient;
@@ -39,6 +40,8 @@ async analyzeRepo(owner: string, repo: string): Promise<RepoAnalysis> {
     analysis.hasPythonRequirements = hasPythonRequirements;
     analysis.hasCI = hasCI;
 
+    let pythonRequirementsContent: string | undefined;
+
     const contentPromises: Promise<void>[] = [];
 
     if (analysis.hasPackageJson) {
@@ -46,17 +49,23 @@ async analyzeRepo(owner: string, repo: string): Promise<RepoAnalysis> {
     }
 
     if (analysis.hasPythonRequirements) {
-        contentPromises.push(this.analyzePythonRequirements(owner, repo, analysis));
+        contentPromises.push((async () => {
+            pythonRequirementsContent = await this.client.fetchFileContent(owner, repo, 'requirements.txt') || undefined;
+        })());
     }
 
     await Promise.all(contentPromises);
 
-    if (analysis.hasDockerfile) {
-        analysis.tools.push('docker');
-    }
-    if (analysis.hasCI) {
-        analysis.tools.push('github-actions');
-    }
+    const tags = defaultTagger.generateTags({
+        dependencies: analysis.dependencies,
+        hasDockerfile: analysis.hasDockerfile,
+        hasCI: analysis.hasCI,
+        hasPythonRequirements: analysis.hasPythonRequirements,
+        pythonRequirementsContent,
+    });
+
+    analysis.frameworks = tags.frameworks;
+    analysis.tools = tags.tools;
 
     return analysis;
 }
@@ -67,38 +76,12 @@ async analyzeRepo(owner: string, repo: string): Promise<RepoAnalysis> {
 
         try {
             const packageJson = JSON.parse(content);
-            const allDeps = {
+            analysis.dependencies = {
                 ...packageJson.dependencies,
                 ...packageJson.devDependencies,
             };
-
-            analysis.dependencies = allDeps;
-
-            if (allDeps['react']) analysis.frameworks.push('react');
-            if (allDeps['next']) analysis.frameworks.push('nextjs');
-            if (allDeps['nuxt']) analysis.frameworks.push('nuxt');
-            if (allDeps['vue']) analysis.frameworks.push('vue');
-            if (allDeps['@angular/core']) analysis.frameworks.push('angular');
-            if (allDeps['express']) analysis.frameworks.push('express');
-            if (allDeps['fastify']) analysis.frameworks.push('fastify');
-            if (allDeps['nestjs']) analysis.frameworks.push('nestjs');
-            if (allDeps['@nestjs/core']) analysis.frameworks.push('nestjs');
-
-            if (allDeps['typescript']) analysis.tools.push('typescript');
-            if (allDeps['jest'] || allDeps['vitest']) analysis.tools.push('testing');
-            if (allDeps['eslint']) analysis.tools.push('linting');
-            if (allDeps['prettier']) analysis.tools.push('formatting');
         } catch (error) {
             console.error(`Failed to parse package.json for ${owner}/${repo}`);
         }
-    }
-
-    private async analyzePythonRequirements(owner: string, repo: string, analysis: RepoAnalysis): Promise<void> {
-        const content = await this.client.fetchFileContent(owner, repo, 'requirements.txt');
-        if (!content) return;
-
-        if (content.includes('django')) analysis.frameworks.push('django');
-        if (content.includes('flask')) analysis.frameworks.push('flask');
-        if (content.includes('fastapi')) analysis.frameworks.push('fastapi');
     }
 }

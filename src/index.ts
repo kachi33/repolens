@@ -1,9 +1,10 @@
 import { Command } from "commander";
 import dotenv from "dotenv";
 import chalk from "chalk";
-import { GithubClient, Languages, generateRepoMarkdown } from "./github";
+import { GithubClient, Languages } from "./github";
 import { writeFileSync } from "fs";
 import { RepoAnalyzer, RepoAnalysis } from "./analyzer";
+import { generateDashboard } from "./dashboard";
 
 
 
@@ -62,7 +63,7 @@ async function main() {
     });
     console.log(chalk.green('✓ Analysis complete'));
 
-    const report = generateRepoMarkdown(repos, languagesMap, analysisMap);
+    const report = generateDashboard(options.user, repos, languagesMap, analysisMap);
 
     writeFileSync(options.output, report);
     console.log(chalk.green(`Report written to ${options.output}`));
