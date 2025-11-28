@@ -77,9 +77,7 @@ Perfect for:
 - Impressing your friends
 - Quietly judging your own tech stack choices
 
-<video src="Repolens-demo.mp4" controls width="100%" autoplay loop muted>
-  Your browser does not support the video tag.
-</video>
+![RepoLens Demo](Repolens-demo.gif)
 
 ## Technology Detection
 
