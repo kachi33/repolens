@@ -77,7 +77,7 @@ Perfect for:
 - Impressing your friends
 - Quietly judging your own tech stack choices
 
-![RepoLens Demo](Repolens-demo.mov)
+![RepoLens Demo](Repolens-demo.mp4)
 
 ## Technology Detection
 
